@@ -14,7 +14,7 @@ VALVES = {
     4: OutputDevice(23)
 }
 
-CONFIG_FILE = "config.json"
+CONFIG_FILE = "Config.json"
 STATE_FILE = "state.json"
 
 # -----------------------------
