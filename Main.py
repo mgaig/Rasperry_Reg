@@ -1,12 +1,15 @@
-import time
-import json
-from datetime import datetime, date
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.templating import Jinja2Templates
 from gpiozero import OutputDevice
+import json
+import time
+from datetime import datetime
 
-# -----------------------------
-# CONFIGURACIÓN
-# -----------------------------
+app = FastAPI()
+templates = Jinja2Templates(directory="templates")
 
+# ---------------- GPIO ----------------
 VALVES = {
     1: OutputDevice(17),
     2: OutputDevice(27),
@@ -14,74 +17,62 @@ VALVES = {
     4: OutputDevice(23)
 }
 
-CONFIG_FILE = "Config.json"
-STATE_FILE = "state.json"
+# ---------------- CONFIG ----------------
+CONFIG_FILE = "config.json"
+state = {"running": False}
 
-# -----------------------------
-# CARGA CONFIG
-# -----------------------------
 
 def load_config():
     with open(CONFIG_FILE, "r") as f:
         return json.load(f)
 
-def load_state():
-    try:
-        with open(STATE_FILE, "r") as f:
-            return json.load(f)
-    except:
-        return {"last_run": None}
 
-def save_state(state):
-    with open(STATE_FILE, "w") as f:
-        json.dump(state, f)
+def run_irrigation(duration):
+    state["running"] = True
 
-# -----------------------------
-# LÓGICA DE RIEGO
-# -----------------------------
+    for v in VALVES.values():
+        v.off()
 
-def run_irrigation(config):
-    duration = config["duration_seconds"]
-
-    print("🚿 Iniciando riego...")
-
-    for valve_id in sorted(VALVES.keys()):
-        print(f"Abriendo válvula {valve_id}")
-
-        valve = VALVES[valve_id]
-        valve.on()
-
+    for i in range(1, 5):
+        print(f"Valve {i} ON")
+        VALVES[i].on()
         time.sleep(duration)
+        VALVES[i].off()
 
-        valve.off()
-        print(f"Cerrando válvula {valve_id}")
+    state["running"] = False
 
-        time.sleep(2)  # pausa entre zonas
 
-    print("✅ Riego completado")
+# ---------------- WEB ----------------
+@app.get("/", response_class=HTMLResponse)
+def root():
+    return "<h2>Riego OK. Ve a /ui</h2>"
 
-# -----------------------------
-# MAIN LOOP
-# -----------------------------
 
-def main():
+@app.get("/ui", response_class=HTMLResponse)
+def ui(request: Request):
+    return templates.TemplateResponse("ui.html", {"request": request})
+
+
+@app.get("/status")
+def status():
+    return state
+
+
+@app.post("/set_duration")
+def set_duration(data: dict):
     config = load_config()
-    state = load_state()
+    config["duration"] = data["duration"]
 
-    while True:
-        now = datetime.now().date().isoformat()
+    with open(CONFIG_FILE, "w") as f:
+        json.dump(config, f)
 
-        if state["last_run"] != now:
-            run_irrigation(config)
-
-            state["last_run"] = now
-            save_state(state)
-
-        else:
-            print("⏳ Ya se ha regado hoy")
-
-        time.sleep(60)  # chequeo cada minuto
+    return {"ok": True, "duration": data["duration"]}
 
 
-if __name__ == "__main__":
-    main()
+@app.post("/start")
+def start():
+    config = load_config()
+    duration = config.get("duration", 10)
+
+    run_irrigation(duration)
+    return {"ok": True, "message": "Irrigation completed"}

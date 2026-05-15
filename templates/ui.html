@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Riego Raspberry</title>
+</head>
+<body style="font-family: Arial; margin: 40px;">
+
+<h2>🌱 Sistema de Riego</h2>
+
+<p id="status">Estado: desconocido</p>
+
+<h3>Duración por válvula (segundos)</h3>
+<input type="range" min="5" max="120" value="30" id="slider">
+<span id="value">30</span>s
+
+<br><br>
+
+<button onclick="setDuration()">Guardar duración</button>
+<button onclick="start()">🚿 Regar ahora</button>
+
+<script>
+const slider = document.getElementById("slider");
+const value = document.getElementById("value");
+
+slider.oninput = () => value.innerText = slider.value;
+
+function setDuration() {
+    fetch("/set_duration", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({duration: parseInt(slider.value)})
+    });
+}
+
+function start() {
+    fetch("/start", {method: "POST"});
+}
+
+async function refresh() {
+    const res = await fetch("/status");
+    const data = await res.json();
+    document.getElementById("status").innerText =
+        "Estado: " + (data.running ? "Regando 🚿" : "Idle 🌙");
+}
+
+setInterval(refresh, 2000);
+refresh();
+</script>
+
+</body>
+</html>
